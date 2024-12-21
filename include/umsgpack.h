@@ -28,65 +28,40 @@
  *
  */
 
-#ifndef UMSGPACK_H_
-#define UMSGPACK_H_
-
+#pragma once
 #include <stdint.h>
 
-#ifdef __x86_64__
-/* Intel EM64T (x86_64)
- *         int    short     long   float     double
- *         32bits ?         32bits 32bits    32bits
- */
-#define UMSGPACK_HW_FLOAT_IEEE754COMPLIANT 1
-#define UMSGPACK_HW_LITTLE_ENDIAN 1
-#define UMSGPACK_INT_WIDTH_32 1
-#define UMSGPACK_FUNC_INT32 1
+#if defined(__ARM_ARCH_7EM__)  // Covers both Cortex-M7 and M4
+/* Common definitions for both cores */
+#define UMSGPACK_HW_LITTLE_ENDIAN 1          // Both M7 and M4 are little endian
+#define UMSGPACK_FUNC_INT32 1                // Both support 32-bit integers
+#define UMSGPACK_INT_WIDTH_32 1              // Native int width is 32-bit
+#define UMSGPACK_FUNC_INT16 1                // Enable 16-bit support
+
+// Add compiler intrinsics for byte swapping
+#if defined(__GNUC__)
+#define _bswap_16(x) __builtin_bswap16(x)
+#define _bswap_32(x) __builtin_bswap32(x)
+#define _bswap_64(x) __builtin_bswap64(x)
 #endif
 
-#ifdef __i386__
-/*
- * Intel x86 32bit
- *
- */
-#define UMSGPACK_HW_FLOAT_IEEE754COMPLIANT 1
-#define UMSGPACK_HW_LITTLE_ENDIAN 1
+/* Cortex-M7 specific features */
+#if __CORTEX_M == 7
+#define UMSGPACK_HW_FLOAT_IEEE754COMPLIANT 1  // FPv5-D16 FPU (double precision)
+#define UMSGPACK_FUNC_INT64 1                 // Enable 64-bit int support
+#define UMSGPACK_DOUBLE_PRECISION 1           // Enable double precision
 
+/* Cortex-M4 specific features */
+#elif __CORTEX_M == 4
+#define UMSGPACK_HW_FLOAT_IEEE754COMPLIANT 1  // FPv4-SP FPU (single precision only)
+#define UMSGPACK_FUNC_INT64 0                 // Disable 64-bit int support
 #endif
 
-#if defined(__AVR__) && defined(__GNUC__)
-/* AVR-GCC
- *         int    short      long   float  double
- *         16bits 16bits 32bits 32bits 32bits
- */
-#define UMSGPACK_HW_FLOAT_IEEE754COMPLIANT 1
-#define UMSGPACK_HW_LITTLE_ENDIAN 1
-#define UMSGPACK_FUNC_INT16 1
-#define UMSGPACK_FUNC_INT32 1
-#define UMSGPACK_INT_WIDTH_16 1
-#define UMSGPACK_LITTLE_ENDIAN
-#endif
+/* Memory optimization hints based on i.MX RT1170 architecture */
+#define UMSGPACK_OPTIMIZE_TCM 1               // Enable TCM optimization if needed
+#define UMSGPACK_CACHE_LINE_SIZE 32           // L1 cache line size
 
-#ifdef __18CXX
-/* MPLAB C18 Compiler. (8bit MCU)
- *         int    short   short_long  long   float     double
- *         16bits 16bits  24bits      24bits 32bitsMCF 32bitsMCF
- */
-
-#define UMSGPACK_HW_BIG_ENDIAN 1
-#endif
-
-/* NXP JN514x/516x Compiler (32bit MCU)
- *
- */
-#ifdef __ba__
-#define UMSGPACK_HW_BIG_ENDIAN 1
-#define UMSGPACK_HW_FLOAT_IEEE754COMPLIANT 1
-#undef UMSGPACK_HW_NEGATIVE_INT64
-#define UMSGPACK_FUNC_INT64 1
-#define UMSGPACK_FUNC_INT32 1
-#define UMSGPACK_INT_WIDTH_16 1
-#endif
+#endif /* __ARM_ARCH_7EM__ */
 
 struct umsgpack_packer_buf {
     unsigned int length;
@@ -96,14 +71,17 @@ struct umsgpack_packer_buf {
 
 #define umsgpack_get_length(buf) buf->pos
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int umsgpack_pack_array(struct umsgpack_packer_buf *, int);
 int umsgpack_pack_uint(struct umsgpack_packer_buf *, unsigned int);
 int umsgpack_pack_int(struct umsgpack_packer_buf *, int);
 
-#ifdef UMSGPACK_FUNC_INT16
+// Always enable INT16 functions since they're needed internally
 int umsgpack_pack_uint16(struct umsgpack_packer_buf *, uint16_t);
 int umsgpack_pack_int16(struct umsgpack_packer_buf *, int16_t);
-#endif
 
 #ifdef UMSGPACK_FUNC_INT32
 int umsgpack_pack_uint32(struct umsgpack_packer_buf *, uint32_t);
@@ -116,9 +94,6 @@ int umsgpack_pack_int64(struct umsgpack_packer_buf *, int64_t);
 #endif
 
 int umsgpack_pack_float(struct umsgpack_packer_buf *, float);
-#if 0
-int umsgpack_pack_double(struct umsgpack_packer_buf *, double);
-#endif
 int umsgpack_pack_map(struct umsgpack_packer_buf *, uint32_t);
 int umsgpack_pack_str(struct umsgpack_packer_buf *, const char *, uint32_t);
 int umsgpack_pack_bool(struct umsgpack_packer_buf *, int);
@@ -127,4 +102,6 @@ void umsgpack_packer_init(struct umsgpack_packer_buf *, size_t);
 struct umsgpack_packer_buf *umsgpack_alloc(size_t);
 int umsgpack_free(struct umsgpack_packer_buf *);
 
-#endif /* UMSGPACK_H_ */
+#ifdef __cplusplus
+}
+#endif
